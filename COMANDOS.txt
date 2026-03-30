@@ -1,0 +1,85 @@
+-----------------------------------Variables base------------------------------------
+
+PROJECT_ID=mlops-14-deploy-fast-john
+REGION=us-central1
+REPO_NAME=ml-images
+IMAGE_NAME=houseprice-api
+TAG=v1
+
+
+-------------------------Crear el repositorio (solo la primera vez)--------------
+
+gcloud artifacts repositories create $REPO_NAME \
+  --repository-format=docker \
+  --location=$REGION \
+  --project=$PROJECT_ID
+
+
+
+-------------------onfigurar Docker para Artifact Registry---------------------------
+
+gcloud auth configure-docker $REGION-docker.pkg.dev
+
+
+
+---------------------------Build y push de la imagen----------------------------
+
+gcloud builds submit --tag us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$TAG
+
+
+-------------------------------Desplegar en Cloud Run---------------------------
+
+--------------------------Crear la Service Account---------------------------
+
+gcloud iam service-accounts create cloudrun-ml-sa \
+  --display-name="Cloud Run ML Service Account"
+
+
+-----------------------------Variables-----------------------------------
+SA_EMAIL=cloudrun-ml-sa@$PROJECT_ID.iam.gserviceaccount.com
+
+------------------------------Asignar permisos necesarios----------------
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/bigquery.user"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/bigquery.dataEditor"
+
+
+
+---------------Desplegar el servicio en Cloud Run usando esa SA------------------------
+
+gcloud run deploy houseprice-api \
+  --image $REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$TAG \
+  --region $REGION \
+  --platform managed \
+  --service-account $SA_EMAIL \
+  --allow-unauthenticated
+
+
+gcloud run deploy houseprice-api \
+  --image $REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$TAG \
+  --region $REGION \
+  --platform managed \
+  --service-account $SA_EMAIL \
+  --no-allow-unauthenticated
+
+
+-------------------------------Asignar permiso de Invocacion API (Cloud Run)-----------------------------
+
+gcloud run services add-iam-policy-binding houseprice-api \
+  --region $REGION \
+  --member="user:john30lexus@gmail.com" \
+  --role="roles/run.invoker"
+
+
+-------------------------------Invocar API-----------------------------
+
+TOKEN=$(gcloud auth print-identity-token)
+
+curl -X POST https://<SERVICE_URL>/predict \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json"
