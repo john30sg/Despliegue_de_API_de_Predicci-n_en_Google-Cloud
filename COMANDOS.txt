@@ -80,6 +80,6 @@ gcloud run services add-iam-policy-binding houseprice-api \
 
 TOKEN=$(gcloud auth print-identity-token)
 
-curl -X POST https://<SERVICE_URL>/predict \
+curl -X POST https://https://houseprice-api-64825349599.us-central1.run.app/predict \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json"
